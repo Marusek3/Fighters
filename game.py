@@ -139,7 +139,5 @@ def main():
         game_logic.check_for_player_collision(player1, player2)
 
 
-print("Taki fajny test")
-
 if __name__ == "__main__":
     main()
