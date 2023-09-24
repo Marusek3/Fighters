@@ -20,10 +20,6 @@ class Files:
         image_folder = root_dir / "images"
         audio_folder = root_dir / "audio"
 
-        self.background_image = pygame.transform.smoothscale(
-            pygame.image.load(str(image_folder / "background.jpg")),
-            (SCREEN_WIDTH, SCREEN_HEIGTH),
-        )  # Background
         self.player1_image = pygame.transform.smoothscale(
             pygame.image.load(str(image_folder / "player1.png")),
             (PLAYER_WIDTH, PLAYER_HEIGTH),
@@ -42,30 +38,31 @@ class Player:
 
         self.speed = 10
         self.direction = direction
-        self.can_move = True
+
         self.can_move_left = True
         self.can_move_right = True
+        self.can_move_down = True
+        self.can_move_up = True
+        self.falling = True
 
         self.health = 10
 
     def move(self, keys_pressed, up, down, left, right):
-        if self.can_move:
-            if keys_pressed[up] and self.y > 0:  # UP
-                self.y -= self.speed
-            if keys_pressed[down] and self.y + PLAYER_HEIGTH < SCREEN_HEIGTH:  # DOWN
-                self.y += self.speed
-            if keys_pressed[left] and self.x > 0 and self.can_move_left:  # LEFT
-                self.direction = "left"
-                self.x -= self.speed
-            if (
-                keys_pressed[right]
-                and self.x + PLAYER_WIDTH < SCREEN_WIDTH
-                and self.can_move_right
-            ):  # RIGHT
-                self.direction = "right"
-                self.x += self.speed
-            self.rect.x = self.x
-            self.rect.y = self.y
+        if keys_pressed[up] and self.y > 0 and self.can_move_up:  # UP
+            self.y -= self.speed
+        if keys_pressed[down] and self.y + PLAYER_HEIGTH < SCREEN_HEIGTH and self.can_move_down:  # DOWN
+            self.y += self.speed
+        if keys_pressed[left] and self.x > 0 and self.can_move_left:  # LEFT
+            self.direction = "left"
+            self.x -= self.speed
+        if keys_pressed[right] and self.x + PLAYER_WIDTH < SCREEN_WIDTH and self.can_move_right:  # RIGHT
+            self.direction = "right"
+            self.x += self.speed
+        # Keybinds
+        if self.falling:
+            self.y += 3
+        self.rect.x = self.x
+        self.rect.y = self.y
 
 
 class GameLogic:
@@ -73,23 +70,12 @@ class GameLogic:
         pass
 
     def update_window(self, files, player1, player2):
-        def draw_background():
-            WIN.fill((62, 91, 140))  # Tło
-            pygame.draw.rect(
-                WIN, (255, 0, 0), (0, SCREEN_HEIGTH - 100, SCREEN_WIDTH, 100)
-            )  # Lawa
-            pygame.draw.rect(
-                WIN,
-                (60, 63, 66),
-                (
-                    (SCREEN_WIDTH - 1000) // 2,
-                    SCREEN_HEIGTH // 3 * 2,
-                    1000,
-                    SCREEN_HEIGTH // 3,
-                ),
-            )
-
-        draw_background()
+        WIN.fill((62, 91, 140))
+        pygame.draw.rect(WIN, (255, 0, 0),
+                         (0, SCREEN_HEIGTH - 100, SCREEN_WIDTH, 100))  # Lava
+        self.main_platform = pygame.draw.rect(WIN, (60, 63, 66), ((
+            SCREEN_WIDTH - 1400) // 2, SCREEN_HEIGTH // 3 * 2, 1400, SCREEN_HEIGTH // 3,),)  # Main platform
+        # Drawing background
 
         if player1.direction == "left":
             WIN.blit(files.player1_image, (player1.x, player1.y))
@@ -98,7 +84,6 @@ class GameLogic:
                 pygame.transform.flip(files.player1_image, True, False),
                 (player1.x, player1.y),
             )
-
         if player2.direction == "left":
             WIN.blit(files.player2_image, (player2.x, player2.y))
         else:
@@ -106,18 +91,18 @@ class GameLogic:
                 pygame.transform.flip(files.player2_image, True, False),
                 (player2.x, player2.y),
             )
+        # Drawing players
 
         pygame.display.update()
 
     def check_for_player_collision(self, player1, player2):
         if player1.rect.colliderect(player2.rect):
-            if (
-                player1.rect.centerx < player2.rect.centerx
-            ):  # Player1 collides from the left
+            if player1.rect.centerx < player2.rect.centerx:
+                # Player1|Player2
                 player1.can_move_right = False
                 player2.can_move_left = False
             else:
-                # Player 1 collides from the right, push right
+                # Player2|Player1
                 player1.can_move_left = False
                 player2.can_move_right = False
 
@@ -125,11 +110,20 @@ class GameLogic:
             player1.rect.y = player1.y
             player2.rect.x = player2.x
             player2.rect.y = player2.y
+            # Updating players position
         else:
             player1.can_move_right = True
             player1.can_move_left = True
             player2.can_move_right = True
             player2.can_move_left = True
+
+    def check_for_platform_collision(self, player):
+        if player.rect.colliderect(self.main_platform):
+            player.falling = False
+            player.can_move_down = False
+        else:
+            player.falling = True
+            player.can_move_down = True
 
 
 def main():
@@ -139,8 +133,8 @@ def main():
     files = Files()
     game_logic = GameLogic()
 
-    player1 = Player(100, 100, "right")
-    player2 = Player(400, 100, "right")
+    player1 = Player(SCREEN_WIDTH//4 * 1, 600, "right")
+    player2 = Player(SCREEN_WIDTH//4 * 3 - PLAYER_WIDTH, 600, "left")
     while playing:
         clock.tick(FPS)
         keys_pressed = pygame.key.get_pressed()
@@ -151,12 +145,15 @@ def main():
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 playing = False
 
-        player1.move(keys_pressed, pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d)
-        player2.move(
-            keys_pressed, pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT
-        )
-        game_logic.update_window(files, player1, player2)
+        player1.move(keys_pressed, pygame.K_w,
+                     pygame.K_s, pygame.K_a, pygame.K_d)
+        player2.move(keys_pressed, pygame.K_UP, pygame.K_DOWN,
+                     pygame.K_LEFT, pygame.K_RIGHT)
         game_logic.check_for_player_collision(player1, player2)
+        game_logic.update_window(files, player1, player2)
+
+        game_logic.check_for_platform_collision(player1)
+        game_logic.check_for_platform_collision(player2)
     pygame.quit()
     sys.exit()
 
