@@ -1,15 +1,17 @@
 import pygame
+import sys
 from pathlib import Path
 
 FPS = 60
 
-PLAYER_WIDTH, PLAYER_HEIGTH = 55, 55
-SCREEN_WIDTH, SCREEN_HEIGTH = 1000, 700
-# Dimentions of objects
 
-WIN = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGTH))
+WIN = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 pygame.display.set_caption("Fighters")
 # Inicialising window
+
+PLAYER_WIDTH, PLAYER_HEIGTH = 55, 55
+SCREEN_WIDTH, SCREEN_HEIGTH = pygame.display.get_surface().get_size()
+# Dimentions of objects
 
 
 class Files:
@@ -21,15 +23,15 @@ class Files:
         self.background_image = pygame.transform.smoothscale(
             pygame.image.load(str(image_folder / "background.jpg")),
             (SCREEN_WIDTH, SCREEN_HEIGTH),
-        )
+        )  # Background
         self.player1_image = pygame.transform.smoothscale(
             pygame.image.load(str(image_folder / "player1.png")),
             (PLAYER_WIDTH, PLAYER_HEIGTH),
-        )
+        )  # Player 1
         self.player2_image = pygame.transform.smoothscale(
             pygame.image.load(str(image_folder / "player2.png")),
             (PLAYER_WIDTH, PLAYER_HEIGTH),
-        )
+        )  # Player 2
 
 
 class Player:
@@ -71,7 +73,23 @@ class GameLogic:
         pass
 
     def update_window(self, files, player1, player2):
-        WIN.blit(files.background_image, (0, 0))
+        def draw_background():
+            WIN.fill((62, 91, 140))  # Tło
+            pygame.draw.rect(
+                WIN, (255, 0, 0), (0, SCREEN_HEIGTH - 100, SCREEN_WIDTH, 100)
+            )  # Lawa
+            pygame.draw.rect(
+                WIN,
+                (60, 63, 66),
+                (
+                    (SCREEN_WIDTH - 1000) // 2,
+                    SCREEN_HEIGTH // 3 * 2,
+                    1000,
+                    SCREEN_HEIGTH // 3,
+                ),
+            )
+
+        draw_background()
 
         if player1.direction == "left":
             WIN.blit(files.player1_image, (player1.x, player1.y))
@@ -130,6 +148,8 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 playing = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                playing = False
 
         player1.move(keys_pressed, pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d)
         player2.move(
@@ -137,6 +157,8 @@ def main():
         )
         game_logic.update_window(files, player1, player2)
         game_logic.check_for_player_collision(player1, player2)
+    pygame.quit()
+    sys.exit()
 
 
 if __name__ == "__main__":
