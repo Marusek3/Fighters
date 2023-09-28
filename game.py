@@ -58,7 +58,7 @@ class Player:
         self.is_jumping = False
         # Player's state
 
-        self.jump_height = 170
+        self.jump_height = 200
 
         self.health = 10
 
@@ -76,7 +76,7 @@ class Player:
         # Keybinds
 
         if self.is_jumping:  # Jump logic
-            if self.y > self.jump_goal:  # If player haven't reached the jump_height
+            if self.y > self.jump_goal and self.can_move_up:  # If player haven't reached the jump_height
                 self.y -= self.jump_velocity
             else:  # After it has reached, it is no longer jumping and begins to fall
                 self.is_jumping = False
@@ -95,9 +95,19 @@ class GameLogic:
 
         self.main_platform = pygame.Rect(
             (SCREEN_WIDTH - 1400) // 2, SCREEN_HEIGHT // 3 * 2, 1400, SCREEN_HEIGHT // 3)
-        self.side_platform1 = pygame.Rect(0, 700, 100, 100)
+        # Pozycja x, y, szerokość, długość
+        self.side_platform1 = pygame.Rect(0, 600, 120, 100)
+        self.side_platform2 = pygame.Rect(SCREEN_WIDTH - 120, 600, 120, 100)
 
-        self.platforms = [self.main_platform, self.side_platform1]
+        self.high_platform1 = pygame.Rect(
+            SCREEN_WIDTH // 2 - 700, 450, 300, 100)
+        self.high_platform2 = pygame.Rect(
+            SCREEN_WIDTH // 2 + 400, 450, 300, 100)
+        self.high_platform3 = pygame.Rect(
+            SCREEN_WIDTH // 2 - 150, 450, 300, 100)
+
+        self.platforms = [self.main_platform,
+                          self.side_platform1, self.side_platform2, self.high_platform1, self.high_platform2, self.high_platform3]
 
     def update_window(self, files, player1, player2):
         WIN.fill(BACKGROUND_COLOR)
@@ -159,21 +169,23 @@ class GameLogic:
 
         for platform in self.platforms:
             if player.rect.colliderect(platform):
-                if player.rect.bottom <= platform.top + 10:  # Checking if the player is on top of the platform
+                # Checking if the player is on top of the platform
+                if player.rect.bottom <= platform.top + 9:
                     player.is_falling = False
                     player.can_jump = True
-                else:
-                    # Checking if the player is colliding with the right side of the platform
-                    if player.rect.right > platform.left and player.rect.left < platform.left:
-                        player.can_move_right = False
-                    # Checking if the player is colliding with the left side of the platform
-                    if player.rect.left < platform.right and player.rect.right > platform.right:
-                        player.can_move_left = False
+                # Checking if the player is colliding with the right side of the platform
+                if player.rect.right > platform.left and player.rect.left < platform.left:
+                    player.can_move_right = False
+                # Checking if the player is colliding with the left side of the platform
+                if player.rect.left < platform.right and player.rect.right > platform.right:
+                    player.can_move_left = False
+                if player.rect.top > platform.bottom:
+                    player.can_move_up = False
 
         # Checking if the player fell into lava
         if player.rect.colliderect(self.lava):
-            player.y = 400
-            player.x = SCREEN_WIDTH // 2
+            player.y = 300
+            player.x = (SCREEN_WIDTH - PLAYER_WIDTH) // 2
 
 
 def main():
