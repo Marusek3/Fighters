@@ -4,7 +4,6 @@ from pathlib import Path
 
 FPS = 60
 
-
 WIN = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 pygame.display.set_caption("Fighters")
 # Inicialising window
@@ -56,15 +55,15 @@ class Player:
 
         self.is_falling = True
         self.is_jumping = False
+        self.is_on_platform = False
         # Player's state
 
         self.jump_height = 200
 
         self.health = 10
 
-    def move(self, keys_pressed, up, left, right):
-
-        if keys_pressed[up] and self.y > 0 and self.can_move_up and not self.is_jumping and self.can_jump:  # JUMP
+    def movement(self, keys_pressed, up, left, right):
+        if keys_pressed[up] and not self.is_jumping and self.can_jump:  # JUMP
             self.is_jumping = True
             self.jump_goal = self.y - self.jump_height
         if keys_pressed[left] and self.x > 0 and self.can_move_left:  # LEFT
@@ -76,17 +75,32 @@ class Player:
         # Keybinds
 
         if self.is_jumping:  # Jump logic
-            if self.y > self.jump_goal and self.can_move_up:  # If player haven't reached the jump_height
+            if self.y > self.jump_goal:  # If player haven't reached the jump_height
                 self.y -= self.jump_velocity
             else:  # After it has reached, it is no longer jumping and begins to fall
                 self.is_jumping = False
                 self.is_falling = True
 
-        if not self.is_jumping and self.is_falling:  # Fall logic
+        if self.is_falling:  # Fall logic
             self.y += self.fall_velocity
 
         self.rect.x = self.x
         self.rect.y = self.y
+
+    def check_state(self):
+        if self.is_on_platform:
+            self.is_falling = False
+            self.is_jumping = False
+            self.can_jump = True
+            self.can_move_left = True
+            self.can_move_right = True
+        else:
+            self.is_falling = True
+            self.can_jump = False
+
+        if self.is_jumping:
+            self.is_falling = False
+            self.can_jump = False
 
 
 class GameLogic:
@@ -95,7 +109,7 @@ class GameLogic:
 
         self.main_platform = pygame.Rect(
             (SCREEN_WIDTH - 1400) // 2, SCREEN_HEIGHT // 3 * 2, 1400, SCREEN_HEIGHT // 3)
-        # Pozycja x, y, szerokość, długość
+        # Pozycja x, y, szerokość, wysokość
         self.side_platform1 = pygame.Rect(0, 600, 120, 100)
         self.side_platform2 = pygame.Rect(SCREEN_WIDTH - 120, 600, 120, 100)
 
@@ -114,6 +128,7 @@ class GameLogic:
         pygame.draw.rect(WIN, RED, self.lava)
         for platform in self.platforms:
             pygame.draw.rect(WIN, PLATFORM_COLOR, platform)
+
         # Drawing background
 
         if player1.direction == "left":
@@ -139,53 +154,50 @@ class GameLogic:
             if player1.rect.centery == player2.rect.centery:
                 if player1.rect.centerx < player2.rect.centerx:
                     # Player1|Player2
-                    player1.can_move_right = False
-                    player2.can_move_left = False
+                    player1.x -= player1.speed
+                    player2.x += player2.speed
                 else:
                     # Player2|Player1
-                    player1.can_move_left = False
-                    player2.can_move_right = False
+                    player1.x += player1.speed
+                    player2.x -= player2.speed
 
-                # Updating players position
             if player1.rect.centery < player2.rect.centery:  # Player1 over player2
                 if player1.rect.centerx < player2.rect.centerx:
                     player1.x -= player1.speed  # Player1 gets pushed to the right
                 else:
                     player1.x += player1.speed  # Player1 gets pushed to the left
+
             if player1.rect.centery > player2.rect.centery:  # Player2 over player1
                 if player1.rect.centerx < player2.rect.centerx:
                     player2.x += player2.speed  # Player2 gets pushed to the left
                 else:
                     player2.x -= player2.speed  # Player2 gets pushed to the right
-        else:
-            player1.can_move_right = True
-            player1.can_move_left = True
-            player2.can_move_right = True
-            player2.can_move_left = True
 
     def check_for_platform_collision(self, player):
-        player.is_falling = True
-        player.can_jump = False
+        player.is_on_platform = False
+        player.can_move_left = True
+        player.can_move_right = True
 
         for platform in self.platforms:
             if player.rect.colliderect(platform):
-                # Checking if the player is on top of the platform
-                if player.rect.bottom <= platform.top + 9:
-                    player.is_falling = False
-                    player.can_jump = True
-                # Checking if the player is colliding with the right side of the platform
-                if player.rect.right > platform.left and player.rect.left < platform.left:
-                    player.can_move_right = False
-                # Checking if the player is colliding with the left side of the platform
-                if player.rect.left < platform.right and player.rect.right > platform.right:
+                if player.rect.bottom <= platform.top + player.jump_velocity:
+                    player.is_on_platform = True
+                else:
+                    player.is_on_platform = False
+
+                if player.rect.centery >= platform.bottom:
+                    player.is_falling = True
+                    player.is_jumping = False
+
+                if player.rect.left < platform.right:
                     player.can_move_left = False
-                if player.rect.top > platform.bottom:
-                    player.can_move_up = False
+                if player.rect.right > platform.left:
+                    player.can_move_right = False
 
         # Checking if the player fell into lava
         if player.rect.colliderect(self.lava):
             player.y = 300
-            player.x = (SCREEN_WIDTH - PLAYER_WIDTH) // 2
+            player.x = (SCREEN_WIDTH - PLAYER_WIDTH) // 2 + 100
 
 
 def main():
@@ -207,13 +219,17 @@ def main():
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 playing = False
 
-        player1.move(keys_pressed, pygame.K_w, pygame.K_a, pygame.K_d)
-        player2.move(keys_pressed, pygame.K_UP, pygame.K_LEFT, pygame.K_RIGHT)
-
         game_logic.check_for_player_collision(player1, player2)
 
         game_logic.check_for_platform_collision(player1)
         game_logic.check_for_platform_collision(player2)
+
+        player1.check_state()
+        player2.check_state()
+
+        player1.movement(keys_pressed, pygame.K_w, pygame.K_a, pygame.K_d)
+        player2.movement(keys_pressed, pygame.K_UP,
+                         pygame.K_LEFT, pygame.K_RIGHT)
 
         game_logic.update_window(files, player1, player2)
     pygame.quit()
