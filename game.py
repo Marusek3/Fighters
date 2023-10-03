@@ -17,6 +17,42 @@ RED = (255, 0, 0)
 BACKGROUND_COLOR = (62, 91, 140)
 
 
+class PushGun:
+    def __init__(self, player) -> None:
+        self.x = player.x
+        self.y = player.y
+
+        self.direction = str(player.direction)
+        self.owner = str(player)
+
+        self.cooldown = 300
+        self.knockback = 100
+
+        self.bullets_right = []
+        self.bullets_left = []
+
+        self.bullet_velocity = 10
+
+    def shoot(self, player):
+        if player.direction == 'right':
+            self.bullets_right.append(
+                pygame.Rect(player.x + 30, self.y+6, 5, 3))
+        else:
+            self.bullets_left.append(
+                pygame.Rect(player.x - 30, self.y+6, 5, 3))
+
+    def update_position(self, player):
+        self.x = player.x + 25 if player.direction == 'right' else player.x-25
+        self.y = player.y + 30
+        self.direction = player.direction
+
+    def handle_bullets(self):
+        for bullet in self.bullets_left:
+            bullet.x -= self.bullet_velocity
+        for bullet in self.bullets_right:
+            bullet.x += self.bullet_velocity
+
+
 class Files:
     def __init__(self) -> None:
         root_dir = Path("Fighters").parent
@@ -31,6 +67,8 @@ class Files:
             pygame.image.load(str(image_folder / "player2.png")),
             (PLAYER_WIDTH, PLAYER_HEIGHT),
         )  # Player 2
+        self.pushgun_image = pygame.transform.scale_by(
+            pygame.image.load(str(image_folder / 'pushgun.png')), 0.5)
 
 
 class Player:
@@ -123,7 +161,7 @@ class GameLogic:
         self.platforms = [self.main_platform,
                           self.side_platform1, self.side_platform2, self.high_platform1, self.high_platform2, self.high_platform3]
 
-    def update_window(self, files, player1, player2):
+    def update_window(self, files, player1, player2, guns, pushgun):
         WIN.fill(BACKGROUND_COLOR)
         pygame.draw.rect(WIN, RED, self.lava)
         for platform in self.platforms:
@@ -146,6 +184,17 @@ class GameLogic:
                 (player2.x, player2.y),
             )
         # Drawing players
+
+        for bullet in pushgun.bullets_right + pushgun.bullets_left:
+            pygame.draw.rect(WIN, (255, 255, 255), bullet)
+
+        for gun in guns:
+            if gun.direction == 'right':
+
+                WIN.blit(files.pushgun_image, (gun.x, gun.y))
+            else:
+                WIN.blit(pygame.transform.flip(
+                    files.pushgun_image, True, False), (gun.x, gun.y))
 
         pygame.display.update()
 
@@ -209,6 +258,9 @@ def main():
 
     player1 = Player(SCREEN_WIDTH//4 * 1, 600, "right")
     player2 = Player(SCREEN_WIDTH//4 * 3 - PLAYER_WIDTH, 600, "left")
+
+    pushgun = PushGun(player1)
+    guns = [pushgun]
     while playing:
         clock.tick(FPS)
         keys_pressed = pygame.key.get_pressed()
@@ -216,8 +268,11 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 playing = False
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                playing = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    playing = False
+                if event.key == pygame.K_SPACE:
+                    pushgun.shoot(player1)
 
         game_logic.check_for_player_collision(player1, player2)
 
@@ -230,8 +285,12 @@ def main():
         player1.movement(keys_pressed, pygame.K_w, pygame.K_a, pygame.K_d)
         player2.movement(keys_pressed, pygame.K_UP,
                          pygame.K_LEFT, pygame.K_RIGHT)
+        pushgun.update_position(player1)
 
-        game_logic.update_window(files, player1, player2)
+        pushgun.handle_bullets()
+
+        game_logic.update_window(files, player1, player2, guns, pushgun)
+
     pygame.quit()
     sys.exit()
 
