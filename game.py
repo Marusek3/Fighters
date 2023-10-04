@@ -17,6 +17,9 @@ PLATFORM_COLOR = (60, 60, 60)
 RED = (255, 0, 0)
 BACKGROUND_COLOR = (62, 91, 140)
 
+PLAYER1_HIT = pygame.USEREVENT + 1
+PLAYER2_HIT = pygame.USEREVENT + 2
+
 
 class PushGun:
     def __init__(self, player) -> None:
@@ -38,10 +41,10 @@ class PushGun:
     def shoot(self, owner):
         if owner.direction == 'right':
             self.bullets_right.append(
-                pygame.Rect(owner.x + 30, self.y + 6, 5, 3))
+                pygame.Rect(owner.x + 40, self.y + 6, 5, 3))
         else:
             self.bullets_left.append(
-                pygame.Rect(owner.x - 30, self.y + 6, 5, 3))
+                pygame.Rect(owner.x - 40, self.y + 6, 5, 3))
 
     def update_position(self, owner):
         self.x = owner.x + 25 if owner.direction == 'right' else owner.x - 25
@@ -246,19 +249,27 @@ class GameLogic:
             player.y = 300
             player.x = (SCREEN_WIDTH - PLAYER_WIDTH) // 2 + 100
 
-    def handle_bullets(self, player1, player2, platforms):
+    def handle_bullets(self, player1, player2):
         for bullet in player1.current_gun.bullets_left + player2.current_gun.bullets_left:
             bullet.x -= player1.current_gun.bullet_velocity
         for bullet in player1.current_gun.bullets_right + player2.current_gun.bullets_right:
             bullet.x += player1.current_gun.bullet_velocity
 
-        bullets = player1.current_gun.bullets_left + player2.current_gun.bullets_left + \
-            player1.current_gun.bullets_right + player2.current_gun.bullets_right
+        bullets = [player1.current_gun.bullets_left, player2.current_gun.bullets_left,
+                   player1.current_gun.bullets_right, player2.current_gun.bullets_right]
 
-        for bullet in bullets:
-            for platform in platforms:
-                if bullet.colliderect(platform):
-                    bullets.remove(bullet)
+        for list_of_bullets in bullets:
+            for bullet in list_of_bullets:
+                for platform in self.platforms:
+                    if bullet.colliderect(platform):
+                        list_of_bullets.remove(bullet)
+
+                if bullet.colliderect(player1):
+                    pygame.event.post(pygame.event.Event(PLAYER1_HIT))
+                    list_of_bullets.remove(bullet)
+                if bullet.colliderect(player2):
+                    pygame.event.post(pygame.event.Event(PLAYER2_HIT))
+                    list_of_bullets.remove(bullet)
 
 
 def main():
@@ -307,7 +318,7 @@ def main():
         player1.current_gun.update_position(player1)
         player2.current_gun.update_position(player2)
 
-        game_logic.handle_bullets(player1, player2, game_logic.platforms)
+        game_logic.handle_bullets(player1, player2)
 
         game_logic.update_window(
             files, player1, player2, guns)
