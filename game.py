@@ -1,6 +1,7 @@
-import pygame
-import sys
 from pathlib import Path
+from random import choice
+import sys
+import pygame
 
 FPS = 60
 
@@ -19,11 +20,12 @@ BACKGROUND_COLOR = (62, 91, 140)
 
 class PushGun:
     def __init__(self, player) -> None:
-        self.x = player.x
-        self.y = player.y
+        self.owner = player
 
-        self.direction = str(player.direction)
-        self.owner = str(player)
+        self.x = self.owner.x
+        self.y = self.owner.y
+
+        self.direction = str(self.owner.direction)
 
         self.cooldown = 300
         self.knockback = 100
@@ -31,26 +33,20 @@ class PushGun:
         self.bullets_right = []
         self.bullets_left = []
 
-        self.bullet_velocity = 10
+        self.bullet_velocity = 15
 
-    def shoot(self, player):
-        if player.direction == 'right':
+    def shoot(self, owner):
+        if owner.direction == 'right':
             self.bullets_right.append(
-                pygame.Rect(player.x + 30, self.y+6, 5, 3))
+                pygame.Rect(owner.x + 30, self.y + 6, 5, 3))
         else:
             self.bullets_left.append(
-                pygame.Rect(player.x - 30, self.y+6, 5, 3))
+                pygame.Rect(owner.x - 30, self.y + 6, 5, 3))
 
-    def update_position(self, player):
-        self.x = player.x + 25 if player.direction == 'right' else player.x-25
-        self.y = player.y + 30
-        self.direction = player.direction
-
-    def handle_bullets(self):
-        for bullet in self.bullets_left:
-            bullet.x -= self.bullet_velocity
-        for bullet in self.bullets_right:
-            bullet.x += self.bullet_velocity
+    def update_position(self, owner):
+        self.x = owner.x + 25 if owner.direction == 'right' else owner.x - 25
+        self.y = owner.y + 30
+        self.direction = owner.direction
 
 
 class Files:
@@ -77,6 +73,7 @@ class Player:
         self.y = y
         self.rect = pygame.Rect(self.x, self.y, PLAYER_WIDTH, PLAYER_HEIGHT)
         self.direction = direction
+        self.current_gun = None
         # Basic stats
 
         self.speed = 10
@@ -140,6 +137,9 @@ class Player:
             self.is_falling = False
             self.can_jump = False
 
+    def get_a_gun(self, gun):
+        self.current_gun = gun
+
 
 class GameLogic:
     def __init__(self) -> None:
@@ -161,13 +161,12 @@ class GameLogic:
         self.platforms = [self.main_platform,
                           self.side_platform1, self.side_platform2, self.high_platform1, self.high_platform2, self.high_platform3]
 
-    def update_window(self, files, player1, player2, guns, pushgun):
-        WIN.fill(BACKGROUND_COLOR)
+    def update_window(self, files, player1, player2, guns):
+        WIN.fill(BACKGROUND_COLOR)  # Drawing background
         pygame.draw.rect(WIN, RED, self.lava)
         for platform in self.platforms:
             pygame.draw.rect(WIN, PLATFORM_COLOR, platform)
-
-        # Drawing background
+        # Drawing platforms
 
         if player1.direction == "left":
             WIN.blit(files.player1_image, (player1.x, player1.y))
@@ -185,12 +184,11 @@ class GameLogic:
             )
         # Drawing players
 
-        for bullet in pushgun.bullets_right + pushgun.bullets_left:
+        for bullet in player1.current_gun.bullets_right + player1.current_gun.bullets_left + player2.current_gun.bullets_right + player2.current_gun.bullets_left:
             pygame.draw.rect(WIN, (255, 255, 255), bullet)
 
         for gun in guns:
             if gun.direction == 'right':
-
                 WIN.blit(files.pushgun_image, (gun.x, gun.y))
             else:
                 WIN.blit(pygame.transform.flip(
@@ -248,6 +246,20 @@ class GameLogic:
             player.y = 300
             player.x = (SCREEN_WIDTH - PLAYER_WIDTH) // 2 + 100
 
+    def handle_bullets(self, player1, player2, platforms):
+        for bullet in player1.current_gun.bullets_left + player2.current_gun.bullets_left:
+            bullet.x -= player1.current_gun.bullet_velocity
+        for bullet in player1.current_gun.bullets_right + player2.current_gun.bullets_right:
+            bullet.x += player1.current_gun.bullet_velocity
+
+        bullets = player1.current_gun.bullets_left + player2.current_gun.bullets_left + \
+            player1.current_gun.bullets_right + player2.current_gun.bullets_right
+
+        for bullet in bullets:
+            for platform in platforms:
+                if bullet.colliderect(platform):
+                    bullets.remove(bullet)
+
 
 def main():
     playing = True
@@ -259,8 +271,12 @@ def main():
     player1 = Player(SCREEN_WIDTH//4 * 1, 600, "right")
     player2 = Player(SCREEN_WIDTH//4 * 3 - PLAYER_WIDTH, 600, "left")
 
-    pushgun = PushGun(player1)
-    guns = [pushgun]
+    player1.get_a_gun(PushGun(player1))
+    player2.get_a_gun(PushGun(player2))
+
+    guns = []
+    guns.append(player1.current_gun)
+    guns.append(player2.current_gun)
     while playing:
         clock.tick(FPS)
         keys_pressed = pygame.key.get_pressed()
@@ -272,7 +288,9 @@ def main():
                 if event.key == pygame.K_ESCAPE:
                     playing = False
                 if event.key == pygame.K_SPACE:
-                    pushgun.shoot(player1)
+                    player1.current_gun.shoot(player1)
+                if event.key == pygame.K_RCTRL:
+                    player2.current_gun.shoot(player2)
 
         game_logic.check_for_player_collision(player1, player2)
 
@@ -285,11 +303,14 @@ def main():
         player1.movement(keys_pressed, pygame.K_w, pygame.K_a, pygame.K_d)
         player2.movement(keys_pressed, pygame.K_UP,
                          pygame.K_LEFT, pygame.K_RIGHT)
-        pushgun.update_position(player1)
 
-        pushgun.handle_bullets()
+        player1.current_gun.update_position(player1)
+        player2.current_gun.update_position(player2)
 
-        game_logic.update_window(files, player1, player2, guns, pushgun)
+        game_logic.handle_bullets(player1, player2, game_logic.platforms)
+
+        game_logic.update_window(
+            files, player1, player2, guns)
 
     pygame.quit()
     sys.exit()
