@@ -3,6 +3,8 @@ from random import choice
 import sys
 import pygame
 
+pygame.font.init()
+
 FPS = 60
 
 WIN = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
@@ -13,12 +15,12 @@ PLAYER_WIDTH, PLAYER_HEIGHT = 55, 55
 SCREEN_WIDTH, SCREEN_HEIGHT = pygame.display.get_surface().get_size()
 # Dimentions of objects
 
-PLATFORM_COLOR = (60, 60, 60)
 RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+PLATFORM_COLOR = (60, 60, 60)
 BACKGROUND_COLOR = (60, 90, 140)
 
-PLAYER1_HIT_PUSH = pygame.USEREVENT + 1
-PLAYER2_HIT_PUSH = pygame.USEREVENT + 2
+HEALTH_FONT = pygame.font.SysFont('comicsans', 50)
 
 
 class PushGun:
@@ -30,9 +32,12 @@ class PushGun:
 
         self.direction = str(self.owner.direction)
 
-        self.cooldown = 300
-        self.knockback = 100
+        self.cooldown = 40
+        self.cooldown_wait = 0
+
+        self.knockback = 200
         self.knockback_length = 0
+        self.knockback_strength = 15
 
         self.bullets_right = []
         self.bullets_left = []
@@ -40,24 +45,20 @@ class PushGun:
         self.bullet_velocity = 15
 
     def shoot(self, owner):
-        if owner.direction == 'right':
-            self.bullets_right.append(
-                pygame.Rect(owner.x + 50, self.y + 6, 5, 3))
-        else:
-            self.bullets_left.append(
-                pygame.Rect(owner.x - 40, self.y + 6, 5, 3))
+        if self.cooldown_wait >= self.cooldown:
+            if owner.direction == 'right':
+                self.bullets_right.append(
+                    pygame.Rect(owner.x + 50, self.y + 6, 5, 3))
+            else:
+                self.bullets_left.append(
+                    pygame.Rect(owner.x - 40, self.y + 6, 5, 3))
+            self.cooldown_wait = 0
 
-    def update_position(self, owner):
+    def update(self, owner):
         self.x = owner.x + 25 if owner.direction == 'right' else owner.x - 25
         self.y = owner.y + 30
+        self.cooldown_wait += 1
         self.direction = owner.direction
-
-    def player_hit(self, player):
-        self.knockback_goal = player.x + self.knockback
-        if self.knockback_length <= self.knockback_goal:
-            player.x -= 10
-        else:
-            self.knockback_length = 0
 
 
 class Files:
@@ -111,7 +112,7 @@ class Player:
 
         self.health = 10
 
-    def movement(self, keys_pressed, up, left, right):
+    def movement(self, keys_pressed, up, left, right, pushgun):
         if keys_pressed[up] and not self.is_jumping and self.can_jump:  # JUMP
             self.is_jumping = True
             self.jump_goal = self.y - self.jump_height
@@ -135,12 +136,13 @@ class Player:
 
         if self.is_knocked_left:
             if self.knock_goal < self.x:
-                self.x -= 10
+                self.x -= pushgun.knockback_strength
             else:
                 self.is_knocked_left = False
+
         if self.is_knocked_right:
             if self.knock_goal > self.x:
-                self.x += 10
+                self.x += pushgun.knockback_strength
             else:
                 self.is_knocked_right = False
 
@@ -161,6 +163,12 @@ class Player:
         if self.is_jumping:
             self.is_falling = False
             self.can_jump = False
+
+        if self.is_knocked_left:
+            self.can_move_right = False
+
+        if self.is_knocked_right:
+            self.can_move_left = False
 
     def get_a_gun(self, gun):
         self.current_gun = gun
@@ -219,6 +227,14 @@ class GameLogic:
                 WIN.blit(pygame.transform.flip(
                     files.pushgun_image, True, False), (gun.x, gun.y))
 
+        player1_health = HEALTH_FONT.render(
+            f'PLAYER RED HEALTH: {player1.health}', 1, RED)
+        player2_health = HEALTH_FONT.render(
+            f'PLAYER GREEN HEALTH: {player2.health}', 1, GREEN)
+        WIN.blit(player1_health, (5, 0))
+        WIN.blit(player2_health, (SCREEN_WIDTH -
+                 player2_health.get_width() - 5, 0))
+
         pygame.display.update()
 
     def check_for_player_collision(self, player1, player2):
@@ -268,41 +284,51 @@ class GameLogic:
 
         # Checking if the player fell into lava
         if player.rect.colliderect(self.lava):
+            player.health -= 1
             player.y = 300
             player.x = (SCREEN_WIDTH - PLAYER_WIDTH) // 2 + 100
 
-    def handle_pushgun_bullets(self, player1, player2):
+    def handle_pushgun_bullets(self, player1, player2, pushgun):
         for bullet in player1.current_gun.bullets_left + player2.current_gun.bullets_left:
             bullet.x -= player1.current_gun.bullet_velocity
         for bullet in player1.current_gun.bullets_right + player2.current_gun.bullets_right:
             bullet.x += player1.current_gun.bullet_velocity
 
-        bullets = [player1.current_gun.bullets_left, player2.current_gun.bullets_left,
-                   player1.current_gun.bullets_right, player2.current_gun.bullets_right]
+        bullets_left = [player1.current_gun.bullets_left,
+                        player2.current_gun.bullets_left]
+        bullets_right = [player1.current_gun.bullets_right,
+                         player2.current_gun.bullets_right]
 
-        for list_of_bullets in bullets:
+        for list_of_bullets in bullets_right:
             for bullet in list_of_bullets:
                 for platform in self.platforms:
                     if bullet.colliderect(platform):
                         list_of_bullets.remove(bullet)
 
                 if bullet.colliderect(player1):
-                    if bullet.centerx > player1.rect.centerx:
-                        player1.knock_goal = player1.x - 200
-                        player1.is_knocked_left = True
-                    else:
-                        player1.knock_goal = player1.x + 200
-                        player1.is_knocked_right = True
-                    pygame.event.post(pygame.event.Event(PLAYER1_HIT_PUSH))
+                    player1.knock_goal = player1.x + pushgun.knockback
+                    player1.is_knocked_right = True
                     list_of_bullets.remove(bullet)
+
                 if bullet.colliderect(player2):
-                    if bullet.centerx > player2.rect.centerx:
-                        player2.knock_goal = player2.x - 200
-                        player2.is_knocked_right = True
-                    else:
-                        player2.knock_goal = player2.x + 200
-                        player2.is_knocked_right = True
-                    pygame.event.post(pygame.event.Event(PLAYER2_HIT_PUSH))
+                    player2.knock_goal = player2.x + pushgun.knockback
+                    player2.is_knocked_right = True
+                    list_of_bullets.remove(bullet)
+
+        for list_of_bullets in bullets_left:
+            for bullet in list_of_bullets:
+                for platform in self.platforms:
+                    if bullet.colliderect(platform):
+                        list_of_bullets.remove(bullet)
+
+                if bullet.colliderect(player1):
+                    player1.knock_goal = player1.x - pushgun.knockback
+                    player1.is_knocked_left = True
+                    list_of_bullets.remove(bullet)
+
+                if bullet.colliderect(player2):
+                    player2.knock_goal = player2.x - pushgun.knockback
+                    player2.is_knocked_left = True
                     list_of_bullets.remove(bullet)
 
 
@@ -318,6 +344,9 @@ def main():
 
     player1.get_a_gun(PushGun(player1))
     player2.get_a_gun(PushGun(player2))
+
+    Tplayer = Player(SCREEN_WIDTH//4 * 3 - PLAYER_WIDTH, 600, "left")
+    Tpushgun = PushGun(Tplayer)
 
     guns = []
     guns.append(player1.current_gun)
@@ -337,10 +366,6 @@ def main():
                     player1.current_gun.shoot(player1)
                 if event.key == pygame.K_RCTRL:
                     player2.current_gun.shoot(player2)
-            if event.type == PLAYER1_HIT_PUSH:
-                player1.current_gun.player_hit(player1)
-            if event.type == PLAYER2_HIT_PUSH:
-                player2.current_gun.player_hit(player2)
 
         game_logic.check_for_player_collision(player1, player2)
 
@@ -349,15 +374,15 @@ def main():
 
         player1.check_state()
         player2.check_state()
-
-        player1.movement(keys_pressed, pygame.K_w, pygame.K_a, pygame.K_d)
+        player1.movement(keys_pressed, pygame.K_w,
+                         pygame.K_a, pygame.K_d, Tpushgun)
         player2.movement(keys_pressed, pygame.K_UP,
-                         pygame.K_LEFT, pygame.K_RIGHT)
+                         pygame.K_LEFT, pygame.K_RIGHT, Tpushgun)
 
-        player1.current_gun.update_position(player1)
-        player2.current_gun.update_position(player2)
+        player1.current_gun.update(player1)
+        player2.current_gun.update(player2)
 
-        game_logic.handle_pushgun_bullets(player1, player2)
+        game_logic.handle_pushgun_bullets(player1, player2, Tpushgun)
 
         game_logic.update_window(
             files, player1, player2, guns)
