@@ -17,20 +17,40 @@ SCREEN_WIDTH, SCREEN_HEIGHT = pygame.display.get_surface().get_size()
 
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+YELLOW = (255, 255, 0)
+
 PLATFORM_COLOR = (60, 60, 60)
 BACKGROUND_COLOR = (60, 90, 140)
 
 HEALTH_FONT = pygame.font.SysFont('comicsans', 50)
 
 
+class Pistol:
+    def __init__(self, player) -> None:
+        self.x = player.x
+        self.y = player.y
+
+        self.direction = str(player.direction)
+
+        self.cooldown = 40
+        self.cooldown_wait = 0
+
+    def update(self, owner):
+        self.x = owner.x + 25 if owner.direction == 'right' else owner.x - 25
+        self.y = owner.y + 30
+        self.cooldown_wait += 1
+        self.direction = owner.direction
+
+
 class PushGun:
     def __init__(self, player) -> None:
-        self.owner = player
+        self.x = player.x
+        self.y = player.y
 
-        self.x = self.owner.x
-        self.y = self.owner.y
-
-        self.direction = str(self.owner.direction)
+        self.direction = str(player.direction)
 
         self.cooldown = 40
         self.cooldown_wait = 0
@@ -77,6 +97,9 @@ class Files:
         )  # Player 2
         self.pushgun_image = pygame.transform.scale_by(
             pygame.image.load(str(image_folder / 'pushgun.png')), 0.5)
+
+        self.pistol_image = pygame.transform.scale_by(
+            pygame.image.load(str(image_folder / 'pistol.png')), 0.7)
 
 
 class Player:
@@ -170,8 +193,11 @@ class Player:
         if self.is_knocked_right:
             self.can_move_left = False
 
-    def get_a_gun(self, gun):
+    def get_a_gun(self, gun, guns):
+        if self.current_gun in guns:
+            guns.remove(self.current_gun)
         self.current_gun = gun
+        guns.append(self.current_gun)
 
 
 class GameLogic:
@@ -185,14 +211,15 @@ class GameLogic:
         self.side_platform2 = pygame.Rect(SCREEN_WIDTH - 120, 600, 120, 100)
 
         self.high_platform1 = pygame.Rect(
-            SCREEN_WIDTH // 2 - 700, 450, 300, 100)
+            SCREEN_WIDTH // 2 - 700, 455, 300, 100)
         self.high_platform2 = pygame.Rect(
-            SCREEN_WIDTH // 2 + 400, 450, 300, 100)
+            SCREEN_WIDTH // 2 + 400, 455, 300, 100)
         self.high_platform3 = pygame.Rect(
-            SCREEN_WIDTH // 2 - 150, 450, 300, 100)
+            SCREEN_WIDTH // 2 - 150, 455, 300, 100)
 
         self.platforms = [self.main_platform,
                           self.side_platform1, self.side_platform2, self.high_platform1, self.high_platform2, self.high_platform3]
+        # Platforms
 
     def update_window(self, files, player1, player2, guns):
         WIN.fill(BACKGROUND_COLOR)  # Drawing background
@@ -218,7 +245,7 @@ class GameLogic:
         # Drawing players
 
         for bullet in player1.current_gun.bullets_right + player1.current_gun.bullets_left + player2.current_gun.bullets_right + player2.current_gun.bullets_left:
-            pygame.draw.rect(WIN, (255, 255, 255), bullet)
+            pygame.draw.rect(WIN, WHITE, bullet)
 
         for gun in guns:
             if gun.direction == 'right':
@@ -341,14 +368,14 @@ def main():
 
     player1 = Player(SCREEN_WIDTH//4 * 1, 600, "right")
     player2 = Player(SCREEN_WIDTH//4 * 3 - PLAYER_WIDTH, 600, "left")
+    guns = []
 
-    player1.get_a_gun(PushGun(player1))
-    player2.get_a_gun(PushGun(player2))
+    player1.get_a_gun(PushGun(player1), guns)
+    player2.get_a_gun(PushGun(player2), guns)
 
     Tplayer = Player(SCREEN_WIDTH//4 * 3 - PLAYER_WIDTH, 600, "left")
     Tpushgun = PushGun(Tplayer)
 
-    guns = []
     guns.append(player1.current_gun)
     guns.append(player2.current_gun)
 
@@ -366,6 +393,8 @@ def main():
                     player1.current_gun.shoot(player1)
                 if event.key == pygame.K_RCTRL:
                     player2.current_gun.shoot(player2)
+                if event.key == pygame.K_1:
+                    player1.get_a_gun(Pistol(player1), guns)
 
         game_logic.check_for_player_collision(player1, player2)
 
@@ -378,9 +407,11 @@ def main():
                          pygame.K_a, pygame.K_d, Tpushgun)
         player2.movement(keys_pressed, pygame.K_UP,
                          pygame.K_LEFT, pygame.K_RIGHT, Tpushgun)
+        if isinstance(player1.current_gun, PushGun):
+            player1.current_gun.update(player1)
 
-        player1.current_gun.update(player1)
-        player2.current_gun.update(player2)
+        if isinstance(player2.current_gun, PushGun):
+            player2.current_gun.update(player2)
 
         game_logic.handle_pushgun_bullets(player1, player2, Tpushgun)
 
