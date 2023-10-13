@@ -29,6 +29,36 @@ BACKGROUND_COLOR = (60, 90, 140)
 HEALTH_FONT = pygame.font.SysFont('comicsans', 50)
 
 
+class Sniper:
+    def __init__(self, player) -> None:
+        self.x = player.x
+        self.y = player.y
+
+        self.direction = str(player.direction)
+
+        self.cooldown = 120
+        self.cooldown_wait = 0
+
+        self.bullet_velocity = 30
+        self.damage = 5
+
+    def update(self, player):
+        self.x = player.x + 35 if player.direction == 'right' else player.x - 70
+        self.y = player.y + 15
+        self.cooldown_wait += 1
+        self.direction = player.direction
+
+    def shoot(self, player, game_logic):
+        if self.cooldown_wait >= self.cooldown:
+            if player.direction == 'right':
+                game_logic.sniper_bullets_right.append(
+                    pygame.Rect(player.x + 50, self.y + 17, 7, 5))
+            else:
+                game_logic.sniper_bullets_left.append(
+                    pygame.Rect(player.x - 40, self.y + 17, 7, 5))
+            self.cooldown_wait = 0
+
+
 class Pistol:
     def __init__(self, player) -> None:
         self.x = player.x
@@ -114,6 +144,9 @@ class Files:
 
         self.pistol_image = pygame.transform.scale_by(
             pygame.image.load(str(image_folder / 'pistol.png')), 0.7)
+
+        self.sniper_image = pygame.transform.scale_by(
+            pygame.image.load(str(image_folder / 'sniper.png')), 0.7)
 
 
 class Player:
@@ -243,6 +276,9 @@ class GameLogic:
         self.pistol_bullets_left = []
         self.pistol_bullets_right = []
 
+        self.sniper_bullets_left = []
+        self.sniper_bullets_right = []
+
     def update_window(self, files, player1, player2, game_logic):
         WIN.fill(BACKGROUND_COLOR)  # Drawing background
         pygame.draw.rect(WIN, RED, self.lava)
@@ -272,11 +308,16 @@ class GameLogic:
         for bullet in game_logic.pistol_bullets_left + game_logic.pistol_bullets_right:
             pygame.draw.rect(WIN, WHITE, bullet)
 
+        for bullet in game_logic.sniper_bullets_left + game_logic.sniper_bullets_right:
+            pygame.draw.rect(WIN, GREEN, bullet)
+
         for player in [player1, player2]:
             if isinstance(player.current_gun, PushGun):
                 gun_image = files.pushgun_image
             elif isinstance(player.current_gun, Pistol):
                 gun_image = files.pistol_image
+            elif isinstance(player.current_gun, Sniper):
+                gun_image = files.sniper_image
 
             if player.current_gun.direction == 'right':
                 WIN.blit(gun_image, (player.current_gun.x, player.current_gun.y))
@@ -345,7 +386,7 @@ class GameLogic:
             player.y = 300
             player.x = (SCREEN_WIDTH - PLAYER_WIDTH) // 2 + 100
 
-    def bullets_move(self, pushgun, pistol):
+    def bullets_move(self, pushgun, pistol, sniper):
         for bullet in self.pushgun_bullets_left:
             bullet.x -= pushgun.bullet_velocity
         for bullet in self.pushgun_bullets_right:
@@ -355,6 +396,11 @@ class GameLogic:
             bullet.x -= pistol.bullet_velocity
         for bullet in self.pistol_bullets_right:
             bullet.x += pistol.bullet_velocity
+
+        for bullet in self.sniper_bullets_left:
+            bullet.x -= sniper.bullet_velocity
+        for bullet in self.sniper_bullets_right:
+            bullet.x += sniper.bullet_velocity
 
     def pushgun_hit(self, player, pushgun):
         for bullet in self.pushgun_bullets_right:
@@ -387,6 +433,16 @@ class GameLogic:
                     player.health -= pistol.damage
                     list_of_bullets.remove(bullet)
 
+    def sniper_hit(self, player, sniper):
+        for list_of_bullets in [self.sniper_bullets_right, self.sniper_bullets_left]:
+            for bullet in list_of_bullets:
+                for platform in self.platforms:
+                    if bullet.colliderect(platform):
+                        list_of_bullets.remove(bullet)
+                if bullet.colliderect(player):
+                    player.health -= sniper.damage
+                    list_of_bullets.remove(bullet)
+
 
 def main():
     playing = True
@@ -404,6 +460,7 @@ def main():
     Tplayer = Player(SCREEN_WIDTH//4 * 3 - PLAYER_WIDTH, 600, "left")
     Tpushgun = PushGun(Tplayer)
     Tpistol = Pistol(Tplayer)
+    Tsniper = Sniper(Tplayer)
 
     while playing:
         clock.tick(FPS)
@@ -424,11 +481,15 @@ def main():
                     player1.get_a_gun(PushGun(player1))
                 if event.key == pygame.K_2:
                     player1.get_a_gun(Pistol(player1))
+                if event.key == pygame.K_3:
+                    player1.get_a_gun(Sniper(player1))
 
                 if event.key == pygame.K_DELETE:
                     player2.get_a_gun(Pistol(player2))
                 if event.key == pygame.K_RSHIFT:
                     player2.get_a_gun(PushGun(player2))
+                if event.key == pygame.K_END:
+                    player2.get_a_gun(Sniper(player2))
 
         game_logic.check_for_player_collision(player1, player2)
 
@@ -446,13 +507,16 @@ def main():
         player1.current_gun.update(player1)
         player2.current_gun.update(player2)
 
-        game_logic.bullets_move(Tpushgun, Tpistol)
+        game_logic.bullets_move(Tpushgun, Tpistol, Tsniper)
 
         game_logic.pushgun_hit(player1, Tpushgun)
         game_logic.pushgun_hit(player2, Tpushgun)
 
         game_logic.pistol_hit(player1, Tpistol)
         game_logic.pistol_hit(player2, Tpistol)
+
+        game_logic.sniper_hit(player1, Tsniper)
+        game_logic.sniper_hit(player2, Tsniper)
 
         game_logic.update_window(files, player1, player2, game_logic)
 
