@@ -1,5 +1,5 @@
 from pathlib import Path
-from random import choice
+from random import randint
 import sys
 import pygame
 
@@ -96,7 +96,7 @@ class PushGun:
 
         self.direction = str(player.direction)
 
-        self.cooldown = 40
+        self.cooldown = 30
         self.cooldown_wait = 0
 
         self.knockback = 300
@@ -106,16 +106,16 @@ class PushGun:
         self.bullets_right = []
         self.bullets_left = []
 
-        self.bullet_velocity = 15
+        self.bullet_velocity = 20
 
     def shoot(self, player, game_logic):
         if self.cooldown_wait >= self.cooldown:
             if player.direction == 'right':
                 game_logic.pushgun_bullets_right.append(
-                    pygame.Rect(player.x + 50, self.y + 6, 7, 5))
+                    pygame.Rect(player.x + 50, self.y + 6, 15, 10))
             else:
                 game_logic.pushgun_bullets_left.append(
-                    pygame.Rect(player.x - 40, self.y + 6, 7, 5))
+                    pygame.Rect(player.x - 40, self.y + 6, 15, 10))
             self.cooldown_wait = 0
 
     def update(self, player):
@@ -382,9 +382,9 @@ class GameLogic:
 
         # Checking if the player fell into lava
         if player.rect.colliderect(self.lava):
-            player.health -= 1
-            player.y = 300
-            player.x = (SCREEN_WIDTH - PLAYER_WIDTH) // 2 + 100
+            player.health -= 2
+            player.y = 0
+            player.x = randint(0, SCREEN_WIDTH - PLAYER_WIDTH)
 
     def bullets_move(self, pushgun, pistol, sniper):
         for bullet in self.pushgun_bullets_left:
@@ -402,46 +402,58 @@ class GameLogic:
         for bullet in self.sniper_bullets_right:
             bullet.x += sniper.bullet_velocity
 
-    def pushgun_hit(self, player, pushgun):
-        for bullet in self.pushgun_bullets_right:
-            for platform in self.platforms:
-                if bullet.colliderect(platform):
-                    self.pushgun_bullets_right.remove(bullet)
-
-            if bullet.colliderect(player):
-                player.knock_goal = player.x + pushgun.knockback
-                player.is_knocked_right = True
-                self.pushgun_bullets_right.remove(bullet)
-
-        for bullet in self.pushgun_bullets_left:
-            for platform in self.platforms:
-                if bullet.colliderect(platform):
-                    self.pushgun_bullets_left.remove(bullet)
-
-            if bullet.colliderect(player):
-                player.knock_goal = player.x - pushgun.knockback
-                player.is_knocked_left = True
-                self.pushgun_bullets_left.remove(bullet)
-
-    def pistol_hit(self, player, pistol):
-        for list_of_bullets in [self.pistol_bullets_right, self.pistol_bullets_left]:
-            for bullet in list_of_bullets:
+    def pushgun_hit(self, player1, player2, pushgun):
+        for player in [player1, player2]:
+            for bullet in self.pushgun_bullets_right + self.pushgun_bullets_left:
                 for platform in self.platforms:
                     if bullet.colliderect(platform):
-                        list_of_bullets.remove(bullet)
+                        if bullet in self.pushgun_bullets_right:
+                            self.pushgun_bullets_right.remove(bullet)
+                        else:
+                            self.pushgun_bullets_left.remove(bullet)
                 if bullet.colliderect(player):
-                    player.health -= pistol.damage
-                    list_of_bullets.remove(bullet)
+                    if bullet in self.pushgun_bullets_right:
+                        player.knock_goal = player.x + pushgun.knockback
+                        player.is_knocked_right = True
+                        self.pushgun_bullets_right.remove(bullet)
+                    else:
+                        player.knock_goal = player.x - pushgun.knockback
+                        player.is_knocked_left = True
+                        self.pushgun_bullets_left.remove(bullet)
 
-    def sniper_hit(self, player, sniper):
-        for list_of_bullets in [self.sniper_bullets_right, self.sniper_bullets_left]:
-            for bullet in list_of_bullets:
-                for platform in self.platforms:
-                    if bullet.colliderect(platform):
+    def pistol_hit(self, player1, player2, pistol):
+        for player in [player1, player2]:
+            for list_of_bullets in [self.pistol_bullets_right, self.pistol_bullets_left]:
+                for bullet in list_of_bullets:
+                    for platform in self.platforms:
+                        if bullet.colliderect(platform):
+                            list_of_bullets.remove(bullet)
+                    if bullet.colliderect(player):
+                        player.health -= pistol.damage
                         list_of_bullets.remove(bullet)
-                if bullet.colliderect(player):
-                    player.health -= sniper.damage
-                    list_of_bullets.remove(bullet)
+
+    def sniper_hit(self, player1, player2, sniper):
+        for player in [player1, player2]:
+            for list_of_bullets in [self.sniper_bullets_right, self.sniper_bullets_left]:
+                for bullet in list_of_bullets:
+                    for platform in self.platforms:
+                        if bullet.colliderect(platform):
+                            list_of_bullets.remove(bullet)
+                    if bullet.colliderect(player):
+                        player.health -= sniper.damage
+                        list_of_bullets.remove(bullet)
+
+    def death_screen(self, player1, player2):
+        for player in [player1, player2]:
+            if player.health <= 0:
+                while True:
+                    for event in pygame.event.get():
+                        if event.type == pygame.KEYDOWN:
+                            if event.key == pygame.K_r:
+                                main()
+                            if event.key == pygame.K_ESCAPE:
+                                pygame.quit()
+                                sys.exit()
 
 
 def main():
@@ -509,16 +521,13 @@ def main():
 
         game_logic.bullets_move(Tpushgun, Tpistol, Tsniper)
 
-        game_logic.pushgun_hit(player1, Tpushgun)
-        game_logic.pushgun_hit(player2, Tpushgun)
-
-        game_logic.pistol_hit(player1, Tpistol)
-        game_logic.pistol_hit(player2, Tpistol)
-
-        game_logic.sniper_hit(player1, Tsniper)
-        game_logic.sniper_hit(player2, Tsniper)
+        game_logic.pushgun_hit(player1, player2, Tpushgun)
+        game_logic.pistol_hit(player1, player2, Tpistol)
+        game_logic.sniper_hit(player1, player2, Tsniper)
 
         game_logic.update_window(files, player1, player2, game_logic)
+
+        game_logic.death_screen(player1, player2)
 
     pygame.quit()
     sys.exit()
