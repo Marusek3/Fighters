@@ -3,7 +3,9 @@ from random import randint
 import sys
 import pygame
 
+pygame.init()
 pygame.font.init()
+pygame.mixer.init()
 
 FPS = 60
 
@@ -29,6 +31,46 @@ BACKGROUND_COLOR = (60, 90, 140)
 HEALTH_FONT = pygame.font.SysFont('comicsans', 50)
 
 
+class Files:
+    def __init__(self) -> None:
+        root_dir = Path("Fighters").parent
+        image_folder = root_dir / "images"
+        audio_folder = root_dir / "audio"
+
+        self.player1_image = pygame.transform.smoothscale(pygame.image.load(
+            str(image_folder / "player1.png")), (PLAYER_WIDTH, PLAYER_HEIGHT))
+        self.player2_image = pygame.transform.smoothscale(pygame.image.load(
+            str(image_folder / "player2.png")), (PLAYER_WIDTH, PLAYER_HEIGHT))
+        # Players
+
+        self.pushgun_image = pygame.transform.scale_by(
+            pygame.image.load(str(image_folder / 'pushgun.png')), 0.5)
+        self.pistol_image = pygame.transform.scale_by(
+            pygame.image.load(str(image_folder / 'pistol.png')), 0.7)
+        self.sniper_image = pygame.transform.scale_by(
+            pygame.image.load(str(image_folder / 'sniper.png')), 0.7)
+        # Guns' images
+
+        self.sniper_sound = pygame.mixer.Sound(
+            str(audio_folder / 'sniper_shot.mp3'))
+        self.pistol_sound = pygame.mixer.Sound(
+            str(audio_folder / 'pistol_shot.mp3'))
+        self.pushgun_sound = pygame.mixer.Sound(
+            str(audio_folder / 'shotgun_shot.mp3'))
+        self.dry_fire_sound = pygame.mixer.Sound(
+            str(audio_folder / 'dry_firing.mp3'))
+
+        # Guns' shot sounds
+
+        self.sniper_get_sound = pygame.mixer.Sound(
+            str(audio_folder / 'sniper_get.mp3'))
+        self.pistol_get_sound = pygame.mixer.Sound(
+            str(audio_folder / 'pistol_get.mp3'))
+        self.pushgun_get_sound = pygame.mixer.Sound(
+            str(audio_folder / 'shotgun_get.mp3'))
+        # Guns' get-sounds
+
+
 class Sniper:
     def __init__(self, player) -> None:
         self.x = player.x
@@ -48,7 +90,7 @@ class Sniper:
         self.cooldown_wait += 1
         self.direction = player.direction
 
-    def shoot(self, player, game_logic):
+    def shoot(self, player, game_logic, files):
         if self.cooldown_wait >= self.cooldown:
             if player.direction == 'right':
                 game_logic.sniper_bullets_right.append(
@@ -56,7 +98,10 @@ class Sniper:
             else:
                 game_logic.sniper_bullets_left.append(
                     pygame.Rect(player.x - 40, self.y + 17, 7, 5))
+            files.sniper_sound.play()
             self.cooldown_wait = 0
+        else:
+            files.dry_fire_sound.play()
 
 
 class Pistol:
@@ -66,7 +111,7 @@ class Pistol:
 
         self.direction = str(player.direction)
 
-        self.cooldown = 20
+        self.cooldown = 10
         self.cooldown_wait = 0
 
         self.bullet_velocity = 20
@@ -78,7 +123,7 @@ class Pistol:
         self.cooldown_wait += 1
         self.direction = player.direction
 
-    def shoot(self, player, game_logic):
+    def shoot(self, player, game_logic, files):
         if self.cooldown_wait >= self.cooldown:
             if player.direction == 'right':
                 game_logic.pistol_bullets_right.append(
@@ -86,7 +131,10 @@ class Pistol:
             else:
                 game_logic.pistol_bullets_left.append(
                     pygame.Rect(player.x - 40, self.y + 6, 7, 5))
+            files.pistol_sound.play()
             self.cooldown_wait = 0
+        else:
+            files.dry_fire_sound.play()
 
 
 class PushGun:
@@ -108,45 +156,24 @@ class PushGun:
 
         self.bullet_velocity = 20
 
-    def shoot(self, player, game_logic):
-        if self.cooldown_wait >= self.cooldown:
-            if player.direction == 'right':
-                game_logic.pushgun_bullets_right.append(
-                    pygame.Rect(player.x + 50, self.y + 6, 15, 10))
-            else:
-                game_logic.pushgun_bullets_left.append(
-                    pygame.Rect(player.x - 40, self.y + 6, 15, 10))
-            self.cooldown_wait = 0
-
     def update(self, player):
         self.x = player.x + 25 if player.direction == 'right' else player.x - 25
         self.y = player.y + 30
         self.cooldown_wait += 1
         self.direction = player.direction
 
-
-class Files:
-    def __init__(self) -> None:
-        root_dir = Path("Fighters").parent
-        image_folder = root_dir / "images"
-        audio_folder = root_dir / "audio"
-
-        self.player1_image = pygame.transform.smoothscale(
-            pygame.image.load(str(image_folder / "player1.png")),
-            (PLAYER_WIDTH, PLAYER_HEIGHT),
-        )  # Player 1
-        self.player2_image = pygame.transform.smoothscale(
-            pygame.image.load(str(image_folder / "player2.png")),
-            (PLAYER_WIDTH, PLAYER_HEIGHT),
-        )  # Player 2
-        self.pushgun_image = pygame.transform.scale_by(
-            pygame.image.load(str(image_folder / 'pushgun.png')), 0.5)
-
-        self.pistol_image = pygame.transform.scale_by(
-            pygame.image.load(str(image_folder / 'pistol.png')), 0.7)
-
-        self.sniper_image = pygame.transform.scale_by(
-            pygame.image.load(str(image_folder / 'sniper.png')), 0.7)
+    def shoot(self, player, game_logic, files):
+        if self.cooldown_wait >= self.cooldown:
+            if player.direction == 'right':
+                game_logic.pushgun_bullets_right.append(
+                    pygame.Rect(player.x + 50, self.y + 6, 12, 8))
+            else:
+                game_logic.pushgun_bullets_left.append(
+                    pygame.Rect(player.x - 40, self.y + 6, 15, 10))
+            files.pushgun_sound.play()
+            self.cooldown_wait = 0
+        else:
+            files.dry_fire_sound.play()
 
 
 class Player:
@@ -260,11 +287,11 @@ class GameLogic:
         self.side_platform2 = pygame.Rect(SCREEN_WIDTH - 120, 600, 120, 100)
 
         self.high_platform1 = pygame.Rect(
-            SCREEN_WIDTH // 2 - 700, 455, 300, 100)
+            SCREEN_WIDTH // 2 - 700, 460, 300, 95)
         self.high_platform2 = pygame.Rect(
-            SCREEN_WIDTH // 2 + 400, 455, 300, 100)
+            SCREEN_WIDTH // 2 + 400, 460, 300, 95)
         self.high_platform3 = pygame.Rect(
-            SCREEN_WIDTH // 2 - 150, 455, 300, 100)
+            SCREEN_WIDTH // 2 - 150, 460, 300, 95)
 
         self.platforms = [self.main_platform,
                           self.side_platform1, self.side_platform2, self.high_platform1, self.high_platform2, self.high_platform3]
@@ -285,6 +312,13 @@ class GameLogic:
         for platform in self.platforms:
             pygame.draw.rect(WIN, PLATFORM_COLOR, platform)
         # Drawing platforms
+        player1_health = HEALTH_FONT.render(
+            f'PLAYER RED HEALTH: {player1.health}', 1, RED)
+        player2_health = HEALTH_FONT.render(
+            f'PLAYER GREEN HEALTH: {player2.health}', 1, GREEN)
+        WIN.blit(player1_health, (5, 0))
+        WIN.blit(player2_health, (SCREEN_WIDTH -
+                 player2_health.get_width() - 5, 0))
 
         if player1.direction == "left":
             WIN.blit(files.player1_image, (player1.x, player1.y))
@@ -324,14 +358,6 @@ class GameLogic:
             else:
                 WIN.blit(pygame.transform.flip(gun_image, True, False),
                          (player.current_gun.x, player.current_gun.y))
-
-        player1_health = HEALTH_FONT.render(
-            f'PLAYER RED HEALTH: {player1.health}', 1, RED)
-        player2_health = HEALTH_FONT.render(
-            f'PLAYER GREEN HEALTH: {player2.health}', 1, GREEN)
-        WIN.blit(player1_health, (5, 0))
-        WIN.blit(player2_health, (SCREEN_WIDTH -
-                 player2_health.get_width() - 5, 0))
 
         pygame.display.update()
 
@@ -485,23 +511,31 @@ def main():
                 if event.key == pygame.K_ESCAPE:
                     playing = False
                 if event.key == pygame.K_SPACE:
-                    player1.current_gun.shoot(player1, game_logic)
+                    player1.current_gun.shoot(player1, game_logic, files)
                 if event.key == pygame.K_RCTRL:
-                    player2.current_gun.shoot(player2, game_logic)
+                    player2.current_gun.shoot(player2, game_logic, files)
 
                 if event.key == pygame.K_1:
                     player1.get_a_gun(PushGun(player1))
+                    files.pushgun_get_sound.play()
                 if event.key == pygame.K_2:
                     player1.get_a_gun(Pistol(player1))
+                    files.pistol_get_sound.play()
                 if event.key == pygame.K_3:
                     player1.get_a_gun(Sniper(player1))
+                    files.sniper_get_sound.play()
+                # Player 1 changing guns
 
                 if event.key == pygame.K_DELETE:
                     player2.get_a_gun(Pistol(player2))
+                    files.pistol_get_sound.play()
                 if event.key == pygame.K_RSHIFT:
                     player2.get_a_gun(PushGun(player2))
-                if event.key == pygame.K_END:
+                    files.pushgun_get_sound.play()
+                if event.key == pygame.K_PAGEDOWN:
                     player2.get_a_gun(Sniper(player2))
+                    files.sniper_get_sound.play()
+                # Player 2 changing guns
 
         game_logic.check_for_player_collision(player1, player2)
 
@@ -535,3 +569,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    print('To się nigdy nie wyświetli.')
