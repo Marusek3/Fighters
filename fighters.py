@@ -1,7 +1,7 @@
-from pathlib import Path
-from random import randint
 import sys
 import pygame
+import os
+from random import randint
 
 pygame.init()
 pygame.font.init()
@@ -29,46 +29,50 @@ PLATFORM_COLOR = (60, 60, 60)
 BACKGROUND_COLOR = (60, 90, 140)
 
 HEALTH_FONT = pygame.font.SysFont('comicsans', 50)
+DEATHSCREEN_FONT1 = pygame.font.SysFont('comicsans', 150)
+DEATHSCREEN_FONT2 = pygame.font.SysFont('comicsans', 100)
 
 
 class Files:
     def __init__(self) -> None:
-        root_dir = Path("Fighters").parent
-        image_folder = root_dir / "images"
-        audio_folder = root_dir / "audio"
+        # Get the directory of the script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        image_folder = os.path.join(script_dir, "images")
+        audio_folder = os.path.join(script_dir, "audio")
 
         self.player1_image = pygame.transform.smoothscale(pygame.image.load(
-            str(image_folder / "player1.png")), (PLAYER_WIDTH, PLAYER_HEIGHT))
+            os.path.join(image_folder, "player1.png")), (PLAYER_WIDTH, PLAYER_HEIGHT))
         self.player2_image = pygame.transform.smoothscale(pygame.image.load(
-            str(image_folder / "player2.png")), (PLAYER_WIDTH, PLAYER_HEIGHT))
-        # Players
+            os.path.join(image_folder, "player2.png")), (PLAYER_WIDTH, PLAYER_HEIGHT))
 
-        self.pushgun_image = pygame.transform.scale_by(
-            pygame.image.load(str(image_folder / 'pushgun.png')), 0.5)
-        self.pistol_image = pygame.transform.scale_by(
-            pygame.image.load(str(image_folder / 'pistol.png')), 0.7)
-        self.sniper_image = pygame.transform.scale_by(
-            pygame.image.load(str(image_folder / 'sniper.png')), 0.7)
-        # Guns' images
+        self.pushgun_image = pygame.transform.scale_by(pygame.image.load(
+            os.path.join(image_folder, 'pushgun.png')), 0.5)
+        self.pistol_image = pygame.transform.scale_by(pygame.image.load(
+            os.path.join(image_folder, 'pistol.png')), 0.7)
+        self.sniper_image = pygame.transform.scale_by(pygame.image.load(
+            os.path.join(image_folder, 'sniper.png')), 0.6)
 
         self.sniper_sound = pygame.mixer.Sound(
-            str(audio_folder / 'sniper_shot.mp3'))
+            os.path.join(audio_folder, 'sniper_shot.mp3'))
         self.pistol_sound = pygame.mixer.Sound(
-            str(audio_folder / 'pistol_shot.mp3'))
+            os.path.join(audio_folder, 'pistol_shot.mp3'))
         self.pushgun_sound = pygame.mixer.Sound(
-            str(audio_folder / 'shotgun_shot.mp3'))
+            os.path.join(audio_folder, 'shotgun_shot.mp3'))
         self.dry_fire_sound = pygame.mixer.Sound(
-            str(audio_folder / 'dry_firing.mp3'))
-
-        # Guns' shot sounds
+            os.path.join(audio_folder, 'dry_firing.mp3'))
 
         self.sniper_get_sound = pygame.mixer.Sound(
-            str(audio_folder / 'sniper_get.mp3'))
+            os.path.join(audio_folder, 'sniper_get.mp3'))
         self.pistol_get_sound = pygame.mixer.Sound(
-            str(audio_folder / 'pistol_get.mp3'))
+            os.path.join(audio_folder, 'pistol_get.mp3'))
         self.pushgun_get_sound = pygame.mixer.Sound(
-            str(audio_folder / 'shotgun_get.mp3'))
-        # Guns' get-sounds
+            os.path.join(audio_folder, 'shotgun_get.mp3'))
+
+        self.background_music = pygame.mixer.Sound(
+            os.path.join(audio_folder, 'background_music.mp3'))
+
+        self.player_death_sound = pygame.mixer.Sound(
+            os.path.join(audio_folder, 'player_death_sound.mp3'))
 
 
 class Sniper:
@@ -86,7 +90,7 @@ class Sniper:
 
     def update(self, player):
         self.x = player.x + 35 if player.direction == 'right' else player.x - 70
-        self.y = player.y + 15
+        self.y = player.y + 20
         self.cooldown_wait += 1
         self.direction = player.direction
 
@@ -177,12 +181,13 @@ class PushGun:
 
 
 class Player:
-    def __init__(self, x, y, direction) -> None:
+    def __init__(self, x, y, direction, id) -> None:
         self.x = x
         self.y = y
         self.rect = pygame.Rect(self.x, self.y, PLAYER_WIDTH, PLAYER_HEIGHT)
         self.direction = direction
         self.current_gun = None
+        self.id = id
         # Basic stats
 
         self.speed = 10
@@ -312,6 +317,7 @@ class GameLogic:
         for platform in self.platforms:
             pygame.draw.rect(WIN, PLATFORM_COLOR, platform)
         # Drawing platforms
+
         player1_health = HEALTH_FONT.render(
             f'PLAYER RED HEALTH: {player1.health}', 1, RED)
         player2_health = HEALTH_FONT.render(
@@ -385,7 +391,7 @@ class GameLogic:
                 else:
                     player2.x -= player2.speed  # Player2 gets pushed to the right
 
-    def check_for_platform_collision(self, player):
+    def check_for_platform_collision(self, player, files):
         player.is_on_platform = False
         player.can_move_left = True
         player.can_move_right = True
@@ -408,7 +414,9 @@ class GameLogic:
 
         # Checking if the player fell into lava
         if player.rect.colliderect(self.lava):
-            player.health -= 2
+            if player.health > 5:
+                files.player_death_sound.play()
+            player.health -= 5
             player.y = 0
             player.x = randint(0, SCREEN_WIDTH - PLAYER_WIDTH)
 
@@ -469,17 +477,36 @@ class GameLogic:
                         player.health -= sniper.damage
                         list_of_bullets.remove(bullet)
 
-    def death_screen(self, player1, player2):
-        for player in [player1, player2]:
-            if player.health <= 0:
-                while True:
-                    for event in pygame.event.get():
-                        if event.type == pygame.KEYDOWN:
-                            if event.key == pygame.K_r:
-                                main()
-                            if event.key == pygame.K_ESCAPE:
-                                pygame.quit()
-                                sys.exit()
+    def death_screen(self, files, player):
+        files.background_music.stop()
+        files.player_death_sound.play()
+        if player.id == 'red':
+            text = 'PLAYER RED WON!'
+            color = RED
+        if player.id == 'green':
+            text = 'PLAYER GREEN WON!'
+            color = GREEN
+        WIN.fill(BLACK)
+
+        main_text = DEATHSCREEN_FONT1.render(text, 1, color)
+        line2 = DEATHSCREEN_FONT2.render('Press \'R\' to play again', 1, WHITE)
+        line3 = DEATHSCREEN_FONT2.render('Press \'Esc\' to leave', 1, WHITE)
+
+        WIN.blit(main_text, ((SCREEN_WIDTH - main_text.get_width()) //
+                 2, (SCREEN_HEIGHT-main_text.get_height())//7))
+        WIN.blit(line2, ((SCREEN_WIDTH - line2.get_width()) //
+                 2, (SCREEN_HEIGHT-line2.get_height())//7*4))
+        WIN.blit(line3, ((SCREEN_WIDTH - line3.get_width()) //
+                 2, (SCREEN_HEIGHT-line3.get_height())//7*6))
+        pygame.display.update()
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_r:
+                        main()
+                    if event.key == pygame.K_ESCAPE:
+                        pygame.quit()
+                        sys.exit()
 
 
 def main():
@@ -489,17 +516,21 @@ def main():
     files = Files()
     game_logic = GameLogic()
 
-    player1 = Player(SCREEN_WIDTH//4 * 1, 600, "right")
-    player2 = Player(SCREEN_WIDTH//4 * 3 - PLAYER_WIDTH, 600, "left")
+    player1 = Player(
+        randint(0, SCREEN_WIDTH-PLAYER_WIDTH),
+        -200, "right", 'red')
+    player2 = Player(randint(0, SCREEN_WIDTH-PLAYER_WIDTH),
+                     -200, "left", 'green')
 
     player1.get_a_gun(PushGun(player1))
     player2.get_a_gun(PushGun(player2))
 
-    Tplayer = Player(SCREEN_WIDTH//4 * 3 - PLAYER_WIDTH, 600, "left")
+    Tplayer = Player(SCREEN_WIDTH//4 * 3 - PLAYER_WIDTH, 600, "left", 'T')
     Tpushgun = PushGun(Tplayer)
     Tpistol = Pistol(Tplayer)
     Tsniper = Sniper(Tplayer)
 
+    files.background_music.play(-1)
     while playing:
         clock.tick(FPS)
         keys_pressed = pygame.key.get_pressed()
@@ -539,8 +570,8 @@ def main():
 
         game_logic.check_for_player_collision(player1, player2)
 
-        game_logic.check_for_platform_collision(player1)
-        game_logic.check_for_platform_collision(player2)
+        game_logic.check_for_platform_collision(player1, files)
+        game_logic.check_for_platform_collision(player2, files)
 
         player1.check_state()
         player2.check_state()
@@ -561,7 +592,10 @@ def main():
 
         game_logic.update_window(files, player1, player2, game_logic)
 
-        game_logic.death_screen(player1, player2)
+        if player1.health <= 0:
+            game_logic.death_screen(files, player2)
+        if player2.health <= 0:
+            game_logic.death_screen(files, player1)
 
     pygame.quit()
     sys.exit()
